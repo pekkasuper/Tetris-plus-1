@@ -1,0 +1,1161 @@
+#include<Windows.h>
+#include<time.h>
+#define DEF_TIMER1 1234
+#define VK_A 0x41
+#define VK_S 0x53
+#define VK_D 0x44
+#define VK_W 0x57
+//背景数组
+int g_arrBackGroud[20][10] = { 0 };
+int g_arrBackGroud1[20][10] = { 0 };
+int g_arrTetricsBlock[2][4] = { 0 };
+int g_nSqareID1 = -1;
+int g_nSqareID2 = -1;
+int g_nLine = -1;
+int g_nList = -1;
+int g_nScore = 0;
+int g_nLine1 = -1;
+int g_nList1 = -1;
+int g_nScore1 = 0;
+HINSTANCE g_hInstance;
+
+LRESULT CALLBACK PELouoSi(HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lParam);
+void OnPaint(HDC hDc);
+void OnCreate();
+void PaintSqare(HDC hMemDC);
+int  CreateRandom();
+void CopytoBack();
+void CopytoBack1();
+void OnReturn(HWND hWnd);
+void Sqaredown();
+void Sqaredown1();
+void OnTimer(HWND hWnd);
+int  CanSqareDown();
+int  CanSqareDowm1();
+int  CanSqareLeft();
+int  CanSqareLeft1();
+int  CanSqareRight();
+int  CanSqareRight1();
+void change1to2();
+void change1To2();
+void show2(HDC hMemDC);
+void OnLeft(HWND hWnd);
+void OnA(HWND hWnd);
+void OnRight(HWND hWnd);
+void OnD(HWND hWnd);
+void OnDwon(HWND hWnd);//与OnTimer一样
+void OnS(HWND hWnd);
+void Sqareleft();
+void Sqareleft1();
+void SqareRight();
+void SqareRight1();
+void OnChange(HWND hWnd);
+void OnW(HWND hWnd);
+void ChangeSqare1();
+void ChangeSqare11();
+void ChangeSqare2();
+void ChangeSqare22();
+void DestroyOneLineSqare();
+void DestroyOneLineSqare1();
+void ShowScore(HDC hMemDC);
+int  CanGmaeOver();
+int  CanGmaeOver1();
+void PainBack(HDC HMemDC);
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInstance, LPSTR lpCmdLine, int nCmdShow)
+{
+	TCHAR szAppClassName[] = TEXT("俄罗斯方块");
+	WNDCLASSEX wc;
+	HWND hWnd;
+	wc.cbClsExtra = 0;
+	wc.cbSize = sizeof(WNDCLASSEX);
+	wc.cbWndExtra = 0;
+	wc.hbrBackground = CreateSolidBrush(RGB(255, 255, 0));
+	wc.hCursor = NULL;//LoadCursor(NULL, IDC)
+	wc.hIcon = NULL;//LoadIcon()
+	wc.hIconSm = NULL;
+	wc.hInstance = hInstance;
+	wc.lpfnWndProc = PELouoSi;//回调函数地址
+	wc.lpszClassName = szAppClassName;
+	wc.lpszMenuName = NULL;
+	wc.style = CS_HREDRAW | CS_VREDRAW;
+	//12个成员
+	//注册窗口
+	if (0 == RegisterClassEx(&wc))
+	{
+		int a = GetLastError();
+		return 0;
+	}
+	//创建窗口
+	hWnd = CreateWindowEx(WS_EX_TOPMOST, szAppClassName, "俄罗斯方块", WS_OVERLAPPEDWINDOW, 100, 100, 1000, 637, NULL, NULL, hInstance, NULL);
+	if (NULL == hWnd) // 窗口句柄
+	{
+		return 0;
+	}
+	//显示窗口
+	ShowWindow(hWnd, SW_SHOWNORMAL);
+	//隐藏显示返回0，正常显示返回非0;
+
+	//消息循环
+	MSG msg;
+	while (GetMessage(&msg, NULL, 0, 0))//NULL与非NULL的区别
+	{
+		TranslateMessage(&msg);//翻译消息
+		DispatchMessage(&msg);//分发消息 命令消息 标准消息 通知消息 自定义消息
+	}
+	return 0;
+}
+LRESULT CALLBACK PELouoSi(HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lParam)
+{
+	switch (nMsg)
+	{
+		PAINTSTRUCT pt;
+		HDC hDC;
+	case WM_CREATE://创建初期只产生一次
+	//初始化数据
+		OnCreate();
+		break;
+	case WM_TIMER:
+		OnTimer(hWnd);
+		break;
+	case WM_PAINT://窗口出现无效区域
+		hDC = BeginPaint(hWnd, &pt);// 窗口可操作区域的标识	
+		OnPaint(hDC);
+		EndPaint(hWnd, &pt);
+		break;
+	case WM_KEYDOWN:
+		switch (wParam)
+		{
+		case VK_RETURN:
+			OnReturn(hWnd);
+			break;
+		case VK_LEFT:
+			OnLeft(hWnd);
+			break;
+		case VK_RIGHT:
+			OnRight(hWnd);
+			break;
+		case VK_UP:
+			OnChange(hWnd);
+			break;
+		case VK_DOWN:
+			OnDwon(hWnd);
+			break;
+		case VK_A:
+			OnA(hWnd);
+			break;
+		case VK_S:
+			OnS(hWnd);
+			break;
+		case VK_D:
+			OnD(hWnd);
+			break;
+		case VK_W:
+			OnW(hWnd);
+			break;
+		}
+		break;
+
+
+	case WM_DESTROY:
+		KillTimer(hWnd, DEF_TIMER1);
+		PostQuitMessage(0);
+		break;
+	}
+	return DefWindowProc(hWnd, nMsg, wParam, lParam);
+}
+
+void OnPaint(HDC hDc)
+{
+	//创建兼容性DC
+	HDC HMemDC = CreateCompatibleDC(hDc);
+	//创建一张纸
+	HBITMAP hBitmapBack = CreateCompatibleBitmap(hDc, 1000, 600);
+	//关联起来
+	SelectObject(HMemDC, hBitmapBack);
+	PainBack(HMemDC);
+	PaintSqare(HMemDC);
+	show2(HMemDC);
+	//传递
+	ShowScore(HMemDC);
+	BitBlt(hDc, 0, 0, 1000, 645, HMemDC, 0, 0, SRCCOPY);
+
+	DeleteObject(hBitmapBack);
+	DeleteDC(HMemDC);
+}
+void PaintSqare(HDC hMemDC)
+{
+	//画大方块
+	HBRUSH hOldBrush;
+	HBRUSH hNewBrush;
+	hNewBrush = (HBRUSH)GetStockObject(NULL_BRUSH);
+	hOldBrush = (HBRUSH)SelectObject(hMemDC, hNewBrush);
+	Rectangle(hMemDC, 0, 0, 300, 600);
+	Rectangle(hMemDC, 300, 0, 700, 600);
+	Rectangle(hMemDC, 700, 0, 1000, 600);
+	hNewBrush = (HBRUSH)SelectObject(hMemDC, hOldBrush);
+	DeleteObject(hNewBrush);
+
+	hNewBrush = CreateSolidBrush(RGB(63, 191, 49));
+	hOldBrush = (HBRUSH)SelectObject(hMemDC, hNewBrush);
+	for (int i = 0; i < 20; i++)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			//画方块
+			if (g_arrBackGroud[i][j] == 1)
+			{
+				Rectangle(hMemDC, j * 30 + 1, i * 30 + 1, j * 30 + 30 - 1, i * 30 + 30 - 1);
+			}
+			if (g_arrBackGroud1[i][j] == 1)
+			{
+				Rectangle(hMemDC, j * 30 + 1 + 700, i * 30 + 1, j * 30 + 30 - 1 + 700, i * 30 + 30 - 1);
+			}
+		}
+	}
+	hNewBrush = (HBRUSH)SelectObject(hMemDC, hOldBrush);
+	DeleteObject(hNewBrush);
+}
+void OnCreate()
+{
+	srand((UINT)time(NULL));
+	g_nSqareID1 = CreateRandom();
+	CopytoBack();
+	g_nSqareID2 = CreateRandom();
+	CopytoBack1();
+}
+int  CreateRandom()
+{
+
+	//生成图形
+	int nIndex = rand() % 7;
+
+	switch (nIndex)
+	{
+	case 0:
+		g_arrTetricsBlock[0][0] = 1, g_arrTetricsBlock[0][1] = 1, g_arrTetricsBlock[0][2] = 0, g_arrTetricsBlock[0][3] = 0;
+		g_arrTetricsBlock[1][0] = 0, g_arrTetricsBlock[1][1] = 1, g_arrTetricsBlock[1][2] = 1, g_arrTetricsBlock[1][3] = 0;
+		g_nLine = 0;
+		g_nList = 3;
+		break;
+	case 1:
+		g_arrTetricsBlock[0][0] = 0, g_arrTetricsBlock[0][1] = 1, g_arrTetricsBlock[0][2] = 1, g_arrTetricsBlock[0][3] = 0;
+		g_arrTetricsBlock[1][0] = 1, g_arrTetricsBlock[1][1] = 1, g_arrTetricsBlock[1][2] = 0, g_arrTetricsBlock[1][3] = 0;
+		g_nLine = 0;
+		g_nList = 3;
+		break;
+	case 2:
+		g_arrTetricsBlock[0][0] = 0, g_arrTetricsBlock[0][1] = 0, g_arrTetricsBlock[0][2] = 1, g_arrTetricsBlock[0][3] = 0;
+		g_arrTetricsBlock[1][0] = 1, g_arrTetricsBlock[1][1] = 1, g_arrTetricsBlock[1][2] = 1, g_arrTetricsBlock[1][3] = 0;
+		g_nLine = 0;
+		g_nList = 3;
+		break;
+	case 3:
+		g_arrTetricsBlock[0][0] = 1, g_arrTetricsBlock[0][1] = 0, g_arrTetricsBlock[0][2] = 0, g_arrTetricsBlock[0][3] = 0;
+		g_arrTetricsBlock[1][0] = 1, g_arrTetricsBlock[1][1] = 1, g_arrTetricsBlock[1][2] = 1, g_arrTetricsBlock[1][3] = 0;
+		g_nLine = 0;
+		g_nList = 3;
+		break;
+	case 4:
+		g_arrTetricsBlock[0][0] = 0, g_arrTetricsBlock[0][1] = 1, g_arrTetricsBlock[0][2] = 0, g_arrTetricsBlock[0][3] = 0;
+		g_arrTetricsBlock[1][0] = 1, g_arrTetricsBlock[1][1] = 1, g_arrTetricsBlock[1][2] = 1, g_arrTetricsBlock[1][3] = 0;
+		g_nLine = 0;
+		g_nList = 3;
+		break;
+	case 5:
+		g_arrTetricsBlock[0][0] = 1, g_arrTetricsBlock[0][1] = 1, g_arrTetricsBlock[0][2] = 0, g_arrTetricsBlock[0][3] = 0;
+		g_arrTetricsBlock[1][0] = 1, g_arrTetricsBlock[1][1] = 1, g_arrTetricsBlock[1][2] = 0, g_arrTetricsBlock[1][3] = 0;
+
+		break;
+	case 6:
+		g_arrTetricsBlock[0][0] = 1, g_arrTetricsBlock[0][1] = 1, g_arrTetricsBlock[0][2] = 1, g_arrTetricsBlock[0][3] = 1;
+		g_arrTetricsBlock[1][0] = 0, g_arrTetricsBlock[1][1] = 0, g_arrTetricsBlock[1][2] = 0, g_arrTetricsBlock[1][3] = 0;
+		g_nLine = 0;
+		g_nList = 4;
+		break;
+	}
+	return nIndex;
+}
+void CopytoBack()
+{
+	for (int i = 0; i < 2; i++)
+	{
+		for (int j = 0; j < 4; j++)
+		{
+			g_arrBackGroud[i][j + 3] = g_arrTetricsBlock[i][j];
+		}
+	}
+}
+void CopytoBack1()
+{
+	for (int i = 0; i < 2; i++)
+	{
+		for (int j = 0; j < 4; j++)
+		{
+			g_arrBackGroud1[i][j + 3] = g_arrTetricsBlock[i][j];
+		}
+	}
+}
+void OnReturn(HWND hWnd)
+{
+	//打开定时器
+	SetTimer(hWnd, DEF_TIMER1, 300, NULL);
+}
+void Sqaredown()
+{
+	//方块下落
+	for (int i = 18; i >= 0; i--)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			if (1 == g_arrBackGroud[i][j])
+			{
+				g_arrBackGroud[i + 1][j] = g_arrBackGroud[i][j];
+				g_arrBackGroud[i][j] = 0;
+			}
+		}
+	}
+}
+void Sqaredown1()
+{
+	//方块下落
+	for (int i = 18; i >= 0; i--)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			if (1 == g_arrBackGroud1[i][j])
+			{
+				g_arrBackGroud1[i + 1][j] = g_arrBackGroud1[i][j];
+				g_arrBackGroud1[i][j] = 0;
+			}
+		}
+	}
+}
+void OnTimer(HWND hWnd)
+{
+	HDC hDc = GetDC(hWnd);
+	//定时器响应函数
+	if (CanSqareDown())
+	{
+		Sqaredown();
+		g_nLine++;
+	}
+	else
+	{
+		change1to2();
+		DestroyOneLineSqare();
+		if (!CanGmaeOver())
+		{
+			//结束
+			KillTimer(hWnd, DEF_TIMER1);
+			return;
+		}
+		g_nSqareID1 = CreateRandom();
+		CopytoBack();
+	}
+	if (CanSqareDowm1())
+	{
+		Sqaredown1();
+		g_nLine1++;
+	}
+	else
+	{
+		change1To2();
+		DestroyOneLineSqare1();
+
+		if (!CanGmaeOver1())
+		{
+			//结束
+			KillTimer(hWnd, DEF_TIMER1);
+			return;
+		}
+		g_nSqareID2 = CreateRandom();
+		CopytoBack1();
+	}
+	//显示方块
+	OnPaint(hDc);
+	ReleaseDC(hWnd, hDc);
+}
+int  CanSqareDown()
+{
+	for (int i = 0; i < 10; i++)
+	{
+		if (1 == g_arrBackGroud[19][i])
+		{
+			return 0;
+		}
+	}
+	for (int i = 18; i >= 0; i--)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			if (1 == g_arrBackGroud[i][j])
+			{
+				if (2 == g_arrBackGroud[i + 1][j])
+				{
+					return 0;
+				}
+			}
+		}
+	}
+	return 1;
+}
+int  CanSqareDowm1()
+{
+	for (int i = 0; i < 10; i++)
+	{
+		if (1 == g_arrBackGroud1[19][i])
+		{
+			return 0;
+		}
+	}
+	for (int i = 18; i >= 0; i--)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			if (1 == g_arrBackGroud1[i][j])
+			{
+				if (2 == g_arrBackGroud1[i + 1][j])
+				{
+					return 0;
+				}
+			}
+		}
+	}
+	return 1;
+}
+void change1to2()
+{
+	for (int i = 0; i < 20; i++)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			if (1 == g_arrBackGroud[i][j])
+			{
+				g_arrBackGroud[i][j] = 2;
+			}
+		}
+	}
+}
+void change1To2()
+{
+	for (int i = 0; i < 20; i++)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			if (1 == g_arrBackGroud1[i][j])
+			{
+				g_arrBackGroud1[i][j] = 2;
+			}
+		}
+	}
+}
+void show2(HDC hMemDC)
+{
+	HBRUSH hOldBrush;
+	HBRUSH hNewBrush = CreateSolidBrush(RGB(233, 27, 182));
+	hOldBrush = (HBRUSH)SelectObject(hMemDC, hNewBrush);
+	for (int i = 0; i < 20; i++)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			if (2 == g_arrBackGroud[i][j])
+			{
+				Rectangle(hMemDC, j * 30 + 1, i * 30 + 1, j * 30 + 30 - 1, i * 30 + 30 - 1);
+			}
+			if (g_arrBackGroud1[i][j] == 2)
+			{
+				Rectangle(hMemDC, j * 30 + 1 + 700, i * 30 + 1, j * 30 + 30 - 1 + 700, i * 30 + 30 - 1);
+			}
+		}
+	}
+	hNewBrush = (HBRUSH)SelectObject(hMemDC, hOldBrush);
+	DeleteObject(hNewBrush);
+}
+void OnLeft(HWND hWnd)
+{
+	if (CanSqareLeft())
+	{
+		HDC hDc = GetDC(hWnd);
+		//左移
+		Sqareleft();
+		g_nList--;
+		//显示方块
+		OnPaint(hDc);
+		ReleaseDC(hWnd, hDc);
+	}
+}
+void OnA(HWND hWnd)
+{
+	if (CanSqareLeft1())
+	{
+		HDC hDc = GetDC(hWnd);
+		//左移
+		Sqareleft1();
+		g_nList1--;
+		//显示方块
+		OnPaint(hDc);
+		ReleaseDC(hWnd, hDc);
+	}
+}
+void Sqareleft()
+{
+	for (int i = 0; i < 20; i++)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			if (1 == g_arrBackGroud[i][j])
+			{
+				g_arrBackGroud[i][j - 1] = g_arrBackGroud[i][j];
+				g_arrBackGroud[i][j] = 0;
+			}
+		}
+	}
+}
+void Sqareleft1()
+{
+	for (int i = 0; i < 20; i++)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			if (1 == g_arrBackGroud1[i][j])
+			{
+				g_arrBackGroud1[i][j - 1] = g_arrBackGroud1[i][j];
+				g_arrBackGroud1[i][j] = 0;
+			}
+		}
+	}
+}
+int  CanSqareLeft()
+{
+	//判断左移
+	for (int i = 0; i < 20; i++)
+	{
+		if (1 == g_arrBackGroud[i][0])
+		{
+			return 0;
+		}
+	}
+	for (int i = 0; i < 20; i++)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			if (1 == g_arrBackGroud[i][j])
+			{
+				if (2 == g_arrBackGroud[i][j - 1])
+				{
+					return 0;
+				}
+			}
+		}
+	}
+	return 1;
+}
+int  CanSqareLeft1()
+{
+	//判断左移
+	for (int i = 0; i < 20; i++)
+	{
+		if (1 == g_arrBackGroud1[i][0])
+		{
+			return 0;
+		}
+	}
+	for (int i = 0; i < 20; i++)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			if (1 == g_arrBackGroud1[i][j])
+			{
+				if (2 == g_arrBackGroud1[i][j - 1])
+				{
+					return 0;
+				}
+			}
+		}
+	}
+	return 1;
+}
+void OnRight(HWND hWnd)
+{
+	if (CanSqareRight())
+	{
+		HDC hDc = GetDC(hWnd);
+		//右移
+		SqareRight();
+		g_nList++;
+		//显示方块
+		OnPaint(hDc);
+		ReleaseDC(hWnd, hDc);
+	}
+}
+void OnD(HWND hWnd)
+{
+	if (CanSqareRight1())
+	{
+		HDC hDc = GetDC(hWnd);
+		//右移
+		SqareRight1();
+		g_nList1++;
+		//显示方块
+		OnPaint(hDc);
+		ReleaseDC(hWnd, hDc);
+	}
+}
+int  CanSqareRight()
+{
+	for (int i = 0; i < 20; i++)
+	{
+		if (1 == g_arrBackGroud[i][9])
+		{
+			return 0;
+		}
+	}
+	for (int i = 0; i < 20; i++)
+	{
+		for (int j = 9; j >= 1; j--)
+		{
+			if (1 == g_arrBackGroud[i][j])
+			{
+				if (2 == g_arrBackGroud[i][j + 1])
+				{
+					return 0;
+				}
+			}
+		}
+	}
+	return 1;
+}
+int  CanSqareRight1()
+{
+	for (int i = 0; i < 20; i++)
+	{
+		if (1 == g_arrBackGroud1[i][9])
+		{
+			return 0;
+		}
+	}
+	for (int i = 0; i < 20; i++)
+	{
+		for (int j = 9; j >= 1; j--)
+		{
+			if (1 == g_arrBackGroud1[i][j])
+			{
+				if (2 == g_arrBackGroud1[i][j + 1])
+				{
+					return 0;
+				}
+			}
+		}
+	}
+	return 1;
+}
+void SqareRight()
+{
+	for (int i = 0; i < 20; i++)
+	{
+		for (int j = 9; j >= 0; j--)
+		{
+			if (1 == g_arrBackGroud[i][j])
+			{
+				g_arrBackGroud[i][j + 1] = g_arrBackGroud[i][j];
+				g_arrBackGroud[i][j] = 0;
+			}
+		}
+	}
+}
+void SqareRight1()
+{
+	for (int i = 0; i < 20; i++)
+	{
+		for (int j = 9; j >= 0; j--)
+		{
+			if (1 == g_arrBackGroud1[i][j])
+			{
+				g_arrBackGroud1[i][j + 1] = g_arrBackGroud1[i][j];
+				g_arrBackGroud1[i][j] = 0;
+			}
+		}
+	}
+}
+void OnDwon(HWND hWnd)
+{
+	HDC hDc = GetDC(hWnd);
+	//定时器响应函数
+	if (CanSqareDown())
+	{
+		Sqaredown();
+		g_nLine++;
+	}
+	else
+	{
+		change1to2();
+		DestroyOneLineSqare();
+		if (!CanGmaeOver())
+		{
+			//结束
+			KillTimer(hWnd, DEF_TIMER1);
+			return;
+		}
+		g_nSqareID1 = CreateRandom();
+		CopytoBack();
+	}
+
+	//显示方块
+	OnPaint(hDc);
+	ReleaseDC(hWnd, hDc);
+}
+void OnS(HWND hWnd)
+{
+	HDC hDc = GetDC(hWnd);
+	//定时器响应函数
+	if (CanSqareDowm1())
+	{
+		Sqaredown1();
+		g_nLine1++;
+	}
+	else
+	{
+		change1To2();
+		DestroyOneLineSqare1();
+
+		if (!CanGmaeOver1())
+		{
+			//结束
+			KillTimer(hWnd, DEF_TIMER1);
+			return;
+		}
+		g_nSqareID2 = CreateRandom();
+		CopytoBack1();
+	}
+	//显示方块
+	OnPaint(hDc);
+	ReleaseDC(hWnd, hDc);
+}
+void OnChange(HWND hWnd)
+{
+	HDC hDc = GetDC(hWnd);
+	switch (g_nSqareID1)
+	{
+	case 0:
+	case 1:
+	case 2:
+	case 3:
+	case 4:
+		//普通变形
+		ChangeSqare1();
+		break;
+	case 5:
+		//正方性
+		return;
+	case 6:
+		//长条形；
+		ChangeSqare2();
+		break;
+	}
+	OnPaint(hDc);
+	ReleaseDC(hWnd, hDc);
+}
+void OnW(HWND hWnd)
+{
+	HDC hDc = GetDC(hWnd);
+	switch (g_nSqareID2)
+	{
+	case 0:
+	case 1:
+	case 2:
+	case 3:
+	case 4:
+		//普通变形
+		ChangeSqare11();
+		break;
+	case 5:
+		//正方性
+		return;
+	case 6:
+		//长条形；
+		ChangeSqare22();
+		break;
+	}
+	OnPaint(hDc);
+	ReleaseDC(hWnd, hDc);
+}
+void ChangeSqare1()
+{
+	int arrSqare[3][3] = { 0 };
+	//复制背景块
+	for (int i = 0; i < 3; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			arrSqare[i][j] = g_arrBackGroud[g_nLine + i][g_nList + j];
+		}
+	}
+	//判断是否能变形
+	for (int i = 0; i < 3; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			if (arrSqare[i][j] == 2)
+				return;
+		}
+	}
+	//特殊情况
+	if (g_nList < 0)g_nList = 0;
+	if (g_nList > 7)g_nList = 7;
+	if (g_nLine > 17)g_nLine = 17;
+	//复制回去
+	for (int i = 0; i < 3; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			g_arrBackGroud[g_nLine + i][g_nList + j] = arrSqare[2 - j][i];
+		}
+	}
+}
+void ChangeSqare11()
+{
+	int arrSqare[3][3] = { 0 };
+	//复制背景块
+	for (int i = 0; i < 3; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			arrSqare[i][j] = g_arrBackGroud1[g_nLine1 + i][g_nList1 + j];
+		}
+	}
+	//判断是否能变形
+	for (int i = 0; i < 3; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			if (arrSqare[i][j] == 2)
+				return;
+		}
+	}
+	//特殊情况
+	if (g_nList1 < 0)g_nList1 = 0;
+	if (g_nList1 > 7)g_nList1 = 7;
+	if (g_nLine1 > 17)g_nLine1 = 17;
+	//复制回去
+	for (int i = 0; i < 3; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			g_arrBackGroud[g_nLine1 + i][g_nList1 + j] = arrSqare[2 - j][i];
+		}
+	}
+}
+void ChangeSqare2()
+{
+	if (g_arrBackGroud[g_nLine][g_nList - 1] == 1)//横着
+	{
+		//清零
+		g_arrBackGroud[g_nLine][g_nList - 1] = 0;
+		g_arrBackGroud[g_nLine][g_nList + 1] = 0;
+		g_arrBackGroud[g_nLine][g_nList + 2] = 0;
+
+		if (2 == g_arrBackGroud[g_nLine + 1][g_nList])
+		{
+			//赋值
+			g_arrBackGroud[g_nLine - 1][g_nList] = 1;
+			g_arrBackGroud[g_nLine - 2][g_nList] = 1;
+			g_arrBackGroud[g_nLine - 3][g_nList] = 1;
+		}
+		else if (2 == g_arrBackGroud[g_nLine + 2][g_nList])
+		{
+			g_arrBackGroud[g_nLine - 1][g_nList] = 1;
+			g_arrBackGroud[g_nLine - 2][g_nList] = 1;
+			g_arrBackGroud[g_nLine + 1][g_nList] = 1;
+		}
+		else if (g_nLine == 0)
+		{
+			g_arrBackGroud[g_nLine + 1][g_nList] = 1;
+			g_arrBackGroud[g_nLine + 2][g_nList] = 1;
+			g_arrBackGroud[g_nLine + 3][g_nList] = 1;
+			g_nLine++;
+		}
+		else if (g_nLine == 19)
+		{
+			g_arrBackGroud[g_nLine - 1][g_nList] = 1;
+			g_arrBackGroud[g_nLine - 2][g_nList] = 1;
+			g_arrBackGroud[g_nLine - 3][g_nList] = 1;
+		}
+		else if (g_nLine == 18)
+		{
+			g_arrBackGroud[g_nLine + 1][g_nList] = 1;
+			g_arrBackGroud[g_nLine - 2][g_nList] = 1;
+			g_arrBackGroud[g_nLine - 1][g_nList] = 1;
+		}
+		else
+		{
+			g_arrBackGroud[g_nLine - 1][g_nList] = 1;
+			g_arrBackGroud[g_nLine + 1][g_nList] = 1;
+			g_arrBackGroud[g_nLine + 2][g_nList] = 1;
+		}
+		//赋值
+
+	}
+	else
+	{
+		//赋值
+		if ((2 == g_arrBackGroud[g_nLine][g_nList + 1] || g_nList == 9) && g_nList - 3 >= 0 && g_arrBackGroud[g_nLine][g_nList - 1] != 2 && g_arrBackGroud[g_nLine][g_nList - 2] != 2 && g_arrBackGroud[g_nLine][g_nList - 3] != 2)
+		{
+			//清零
+			g_arrBackGroud[g_nLine - 1][g_nList] = 0;
+			g_arrBackGroud[g_nLine + 1][g_nList] = 0;
+			g_arrBackGroud[g_nLine + 2][g_nList] = 0;
+			//赋值
+			g_arrBackGroud[g_nLine][g_nList - 1] = 1;
+			g_arrBackGroud[g_nLine][g_nList - 2] = 1;
+			g_arrBackGroud[g_nLine][g_nList - 3] = 1;
+			//标记改变
+			g_nList -= 2;
+		}
+		else if ((2 == g_arrBackGroud[g_nLine][g_nList + 2] || g_nList == 8) && g_nList - 2 >= 0 && g_arrBackGroud[g_nLine][g_nList - 1] != 2 && g_arrBackGroud[g_nLine][g_nList - 2] != 2)
+		{
+			//清零
+			g_arrBackGroud[g_nLine - 1][g_nList] = 0;
+			g_arrBackGroud[g_nLine + 1][g_nList] = 0;
+			g_arrBackGroud[g_nLine + 2][g_nList] = 0;
+			//赋值
+			g_arrBackGroud[g_nLine][g_nList + 1] = 1;
+			g_arrBackGroud[g_nLine][g_nList - 1] = 1;
+			g_arrBackGroud[g_nLine][g_nList - 2] = 1;
+			//标记改变
+			g_nList -= 1;
+		}
+		else if ((2 == g_arrBackGroud[g_nLine][g_nList - 1] || g_nList == 0) && g_nList + 3 < 10 && g_arrBackGroud[g_nLine][g_nList + 1] != 2 && g_arrBackGroud[g_nLine][g_nList + 2] != 2 && g_arrBackGroud[g_nLine][g_nList + 3] != 2)
+		{
+			//清零
+			g_arrBackGroud[g_nLine - 1][g_nList] = 0;
+			g_arrBackGroud[g_nLine + 1][g_nList] = 0;
+			g_arrBackGroud[g_nLine + 2][g_nList] = 0;
+			//赋值
+			g_arrBackGroud[g_nLine][g_nList + 1] = 1;
+			g_arrBackGroud[g_nLine][g_nList + 2] = 1;
+			g_arrBackGroud[g_nLine][g_nList + 3] = 1;
+			//标记改变
+			g_nList += 1;
+		}
+		else if (g_nList + 2 < 10 && g_arrBackGroud[g_nLine][g_nList + 1] != 2 && g_arrBackGroud[g_nLine][g_nList + 2] != 2 && g_arrBackGroud[g_nLine][g_nList - 1] != 2)
+		{
+			//清零
+			g_arrBackGroud[g_nLine - 1][g_nList] = 0;
+			g_arrBackGroud[g_nLine + 1][g_nList] = 0;
+			g_arrBackGroud[g_nLine + 2][g_nList] = 0;
+			//赋值
+			g_arrBackGroud[g_nLine][g_nList - 1] = 1;
+			g_arrBackGroud[g_nLine][g_nList + 1] = 1;
+			g_arrBackGroud[g_nLine][g_nList + 2] = 1;
+		}
+
+	}
+}
+void ChangeSqare22()
+{
+	if (g_arrBackGroud1[g_nLine1][g_nList1 - 1] == 1)//横着
+	{
+		//清零
+		g_arrBackGroud1[g_nLine1][g_nList1 - 1] = 0;
+		g_arrBackGroud1[g_nLine1][g_nList1 + 1] = 0;
+		g_arrBackGroud1[g_nLine1][g_nList1 + 2] = 0;
+
+		if (2 == g_arrBackGroud1[g_nLine1 + 1][g_nList1])
+		{
+			//赋值
+			g_arrBackGroud1[g_nLine1 - 1][g_nList1] = 1;
+			g_arrBackGroud1[g_nLine1 - 2][g_nList1] = 1;
+			g_arrBackGroud1[g_nLine1 - 3][g_nList1] = 1;
+		}
+		else if (2 == g_arrBackGroud1[g_nLine1 + 2][g_nList1])
+		{
+			g_arrBackGroud1[g_nLine1 - 1][g_nList1] = 1;
+			g_arrBackGroud1[g_nLine1 - 2][g_nList1] = 1;
+			g_arrBackGroud1[g_nLine1 + 1][g_nList1] = 1;
+		}
+		else if (g_nLine1 == 0)
+		{
+			g_arrBackGroud1[g_nLine1 + 1][g_nList1] = 1;
+			g_arrBackGroud1[g_nLine1 + 2][g_nList1] = 1;
+			g_arrBackGroud1[g_nLine1 + 3][g_nList1] = 1;
+			g_nLine1++;
+		}
+		else if (g_nLine1 == 19)
+		{
+			g_arrBackGroud1[g_nLine1 - 1][g_nList1] = 1;
+			g_arrBackGroud1[g_nLine1 - 2][g_nList1] = 1;
+			g_arrBackGroud1[g_nLine1 - 3][g_nList1] = 1;
+		}
+		else if (g_nLine1 == 18)
+		{
+			g_arrBackGroud1[g_nLine1 + 1][g_nList1] = 1;
+			g_arrBackGroud1[g_nLine1 - 2][g_nList1] = 1;
+			g_arrBackGroud1[g_nLine1 - 1][g_nList1] = 1;
+		}
+		else
+		{
+			g_arrBackGroud1[g_nLine1 - 1][g_nList1] = 1;
+			g_arrBackGroud1[g_nLine1 + 1][g_nList1] = 1;
+			g_arrBackGroud1[g_nLine1 + 2][g_nList1] = 1;
+		}
+		//赋值
+
+	}
+	else
+	{
+		//赋值
+		if ((2 == g_arrBackGroud1[g_nLine1][g_nList1 + 1] || g_nList1 == 9) && g_nList1 - 3 >= 0 && g_arrBackGroud1[g_nLine1][g_nList1 - 1] != 2 && g_arrBackGroud1[g_nLine1][g_nList1 - 2] != 2 && g_arrBackGroud1[g_nLine1][g_nList1 - 3] != 2)
+		{
+			//清零
+			g_arrBackGroud1[g_nLine1 - 1][g_nList1] = 0;
+			g_arrBackGroud1[g_nLine1 + 1][g_nList1] = 0;
+			g_arrBackGroud1[g_nLine1 + 2][g_nList1] = 0;
+			//赋值
+			g_arrBackGroud1[g_nLine1][g_nList1 - 1] = 1;
+			g_arrBackGroud1[g_nLine1][g_nList1 - 2] = 1;
+			g_arrBackGroud1[g_nLine1][g_nList1 - 3] = 1;
+			//标记改变
+			g_nList1 -= 2;
+		}
+		else if ((2 == g_arrBackGroud1[g_nLine1][g_nList1 + 2] || g_nList1 == 8) && g_nList1 - 2 >= 0 && g_arrBackGroud1[g_nLine1][g_nList1 - 1] != 2 && g_arrBackGroud1[g_nLine1][g_nList1 - 2] != 2)
+		{
+			//清零
+			g_arrBackGroud1[g_nLine1 - 1][g_nList1] = 0;
+			g_arrBackGroud1[g_nLine1 + 1][g_nList1] = 0;
+			g_arrBackGroud1[g_nLine1 + 2][g_nList1] = 0;
+			//赋值
+			g_arrBackGroud1[g_nLine1][g_nList1 + 1] = 1;
+			g_arrBackGroud1[g_nLine1][g_nList1 - 1] = 1;
+			g_arrBackGroud1[g_nLine1][g_nList1 - 2] = 1;
+			//标记改变
+			g_nList1 -= 1;
+		}
+		else if ((2 == g_arrBackGroud1[g_nLine1][g_nList1 - 1] || g_nList1 == 0) && g_nList1 + 3 < 10 && g_arrBackGroud1[g_nLine1][g_nList1 + 1] != 2 && g_arrBackGroud1[g_nLine1][g_nList1 + 2] != 2 && g_arrBackGroud1[g_nLine1][g_nList1 + 3] != 2)
+		{
+			//清零
+			g_arrBackGroud1[g_nLine1 - 1][g_nList1] = 0;
+			g_arrBackGroud1[g_nLine1 + 1][g_nList1] = 0;
+			g_arrBackGroud1[g_nLine1 + 2][g_nList1] = 0;
+			//赋值
+			g_arrBackGroud1[g_nLine1][g_nList1 + 1] = 1;
+			g_arrBackGroud1[g_nLine1][g_nList1 + 2] = 1;
+			g_arrBackGroud1[g_nLine1][g_nList1 + 3] = 1;
+			//标记改变
+			g_nList1 += 1;
+		}
+		else if (g_nList1 + 2 < 10 && g_arrBackGroud1[g_nLine1][g_nList1 + 1] != 2 && g_arrBackGroud1[g_nLine1][g_nList1 + 2] != 2 && g_arrBackGroud1[g_nLine1][g_nList1 - 1] != 2)
+		{
+			//清零
+			g_arrBackGroud1[g_nLine1 - 1][g_nList1] = 0;
+			g_arrBackGroud1[g_nLine1 + 1][g_nList1] = 0;
+			g_arrBackGroud1[g_nLine1 + 2][g_nList1] = 0;
+			//赋值
+			g_arrBackGroud1[g_nLine1][g_nList1 - 1] = 1;
+			g_arrBackGroud1[g_nLine1][g_nList1 + 1] = 1;
+			g_arrBackGroud1[g_nLine1][g_nList1 + 2] = 1;
+		}
+
+	}
+}
+void DestroyOneLineSqare()
+{
+	int nSum = 0;
+	for (int i = 19; i >= 0; i--)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			nSum += g_arrBackGroud[i][j];
+		}
+		if (20 == nSum)
+		{
+			g_nScore++;
+			//消除一行
+			for (int k = i - 1; k >= 0; k--)
+			{
+				for (int j = 0; j < 10; j++)
+				{
+					g_arrBackGroud[k + 1][j] = g_arrBackGroud[k][j];
+				}
+			}
+			i++;
+		}
+		nSum = 0;
+	}
+}
+void DestroyOneLineSqare1()
+{
+	int nSum = 0;
+	for (int i = 19; i >= 0; i--)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			nSum += g_arrBackGroud1[i][j];
+		}
+		if (20 == nSum)
+		{
+			g_nScore1++;
+			//消除一行
+			for (int k = i - 1; k >= 0; k--)
+			{
+				for (int j = 0; j < 10; j++)
+				{
+					g_arrBackGroud1[k + 1][j] = g_arrBackGroud1[k][j];
+				}
+			}
+			i++;
+		}
+		nSum = 0;
+	}
+}
+void ShowScore(HDC hMemDC)
+{
+	char strScore[10] = { 0 };
+	char strScore1[10] = { 0 };
+	_itoa_s(g_nScore, strScore, 10);
+	_itoa_s(g_nScore1, strScore1, 10);
+	TextOut(hMemDC, 350, 10, "按回车开始游戏", strlen("按回车开始游戏"));
+	TextOut(hMemDC, 550, 10, "按回车开始游戏", strlen("按回车开始游戏"));
+	TextOut(hMemDC, 370, 32, "玩家一分数", strlen("玩家一分数"));
+	TextOut(hMemDC, 570, 32, "玩家二分数", strlen("玩家二分数"));
+	TextOut(hMemDC, 400, 54, strScore, strlen(strScore));
+	TextOut(hMemDC, 600, 54, strScore1, strlen(strScore1));
+}
+int  CanGmaeOver()
+{
+	for (int i = 0; i < 10; i++)
+	{
+		if (2 == g_arrBackGroud[0][i])
+		{
+			//游戏结束
+			MessageBox(NULL, "GameOver 玩家2胜利", "提示", MB_OK);
+			return 0;
+		}
+	}
+	return 1;
+}
+int  CanGmaeOver1()
+{
+	for (int i = 0; i < 10; i++)
+	{
+		if (2 == g_arrBackGroud1[0][i])
+		{
+			//游戏结束
+			MessageBox(NULL, "GameOver 玩家1胜利", "提示", MB_OK);
+			return 0;
+		}
+	}
+	return 1;
+}
+void PainBack(HDC hDC)
+{
+	//加载图片
+	HBITMAP hBmp = (HBITMAP)LoadImage(g_hInstance, "bgd.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+	//显示到界面上
+	HDC hMemDC = CreateCompatibleDC(hDC);
+	SelectObject(hMemDC, hBmp);
+	//贴图
+	//SetStretchBltMode(hDC, HALFTONE);
+	BitBlt(hDC, 0, 0, 1000, 600, hMemDC, 0, 0, SRCCOPY);
+	//StretchBlt(hDC, 0, 0, 488, 630, hMemDC, 0, 0, 488, 867, SRCCOPY);
+}
