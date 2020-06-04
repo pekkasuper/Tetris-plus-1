@@ -1,0 +1,1017 @@
+#include<iostream>
+#include<ctime>
+#include<conio.h>
+#include<cstdlib>
+#include<windows.h>
+using namespace std;
+#define WIDTH  56
+#define HEIGHT 22
+
+int map[HEIGHT][WIDTH] = { 0 };//用于储存全局方块信息的重要数组
+int speed = 2;//较为正常的速度
+int ghost = 0;//进入幽灵模式
+/*幽灵模式为上半部分行数不显示下落的方块下半部分开始显示这就意味着
+必须要在下半部分就控制消行否则出界无法受控制基本输定.
+*/
+/*由于未知原因上传代码可能存在打印初始界面和结束界面存在错乱请及时联系本小组*/
+class Block
+{
+public:
+	int x;
+	int y;
+	int speice;
+	int player;
+	int rotater;
+	int bottom;
+	int next;
+	
+	void randomSpecie();
+	void xyLocation();
+	void reSet();
+	Block() = default;
+	Block(int player)//初始化某个方块对象
+	{
+		randomSpecie();//初始化方块种类
+		if (player == 1)
+		{
+			this->player = player;
+			this->bottom = 0;
+			this->rotater = 1;
+			
+		}
+		else
+		{
+			this->player = player;
+			this->bottom = 0;
+			this->rotater = 1;
+		}
+		xyLocation();//随机初始化方块生成的坐标
+		srand((unsigned int)time(NULL));
+		this->next = rand() % 5 + 1;//初始化时必须准备的东西为下一方块绘图
+	}
+};
+inline void Block::randomSpecie()
+{
+	srand((unsigned int)time(NULL));
+	this->speice = rand() % 5 + 1;
+}
+inline void Block::xyLocation()
+{
+	if (this->player == 1)
+	{
+		srand((unsigned int)time(NULL));
+		int temp = rand() % 13 + 2;//原本生成范围在0~12现在为2~14;
+		if (temp % 2)this->x = temp + 1;
+		else this->x = temp;
+		this->y = 0;
+	}
+	else
+	{
+		srand((unsigned int)time(NULL));
+		int temp = rand() % 13 + 34;//原本生成范围在0~12现在为34~46;
+		if (temp % 2)this->x = temp + 1;
+		else this->x = temp;
+		this->y = 0;
+	}
+}
+inline void Block::reSet()
+{
+	xyLocation();
+	this->bottom = 0;
+	randomSpecie();
+	int changer = this->speice;
+	this->speice = this->next;
+	this->next = changer;
+	this->rotater = 1;
+	//this->x = 10;仅供调试使用
+}
+
+using bk = Block;
+void hidden_cursor();//隐藏光标
+void gotoxy(int x, int y);//移动光标
+void paint();//绘制彩色方块
+void printBorder();//开始时绘制边界
+void gameRunning();//主游戏控制函数
+void blockChanger(bk&who);//辅助方块分类为实现方块打印做铺垫
+int getConstruction(bk& who);//负责将方块的状态告知准备给数组赋值的函数
+void LineBlock(bk& who);//一条直线的故事即将开始
+void SquareBlock(bk& who);//一个正方形的故事即将开始
+void ZBlock(bk& who);//一个Z字形方块的故事即将开始
+void MidStanding(bk& who);//一个凸字形的故事即将开始
+void LeftBlock(bk& who);//一个L字形方块的故事即将开始
+void search();//负责仅将数组值变为0上的清空界面
+void searchMap();//负责实际的清空该界面和重新打印方块
+int BottomScanner(bk& who);//检测是否到达底部以检测能否继续下移
+void bkForecastPaint(bk&who);//预测下一方块是什么配合检测底部函数使用
+void gameOverFunction(int number);//游戏结束函数
+bool LeftBorderScanner(bk& who);//游戏左界面检测函数
+bool RightBorderScanner(bk& who);//游戏右界面检测函数
+bool rotaterScanner(bk& who);//旋转测试函数
+bool LineRotater(bk& who);//直线旋转检测函数
+bool ZBlockRotater(bk& who);//Z字形旋转检测函数
+bool LeftRotater(bk& who);//L字形旋转检测函数
+bool MidSRotater(bk& who);//凸字形方块旋转检测函数
+void DeleteMap(bk&who);//检测行的情况并且决定是否消行以及相应的操作
+void Triesprint();//打印最初的游戏界面函数
+bool FriendshipOver(int number);//友谊终结函数此消彼长函数
+void HowToOperate(void);//操作简介函数
+void function();//测试函数
+
+void hidden_cursor()//隐藏光标
+{
+	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_CURSOR_INFO cci;
+	GetConsoleCursorInfo(hOut, &cci);
+	cci.bVisible = 0;//赋1为显示，赋0为隐藏
+	SetConsoleCursorInfo(hOut, &cci);
+}
+void gotoxy(int x, int y)
+{
+	COORD coord;
+	coord.X = x;
+	coord.Y = y;
+	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+}
+void paint()
+{
+	srand((unsigned int)time(NULL));
+	int color = rand() % 7 + 1;
+	switch (color)
+	{
+	case 0: color = 9; break;
+	case 1:
+	case 2: color = 12; break;
+	case 3:
+	case 4: color = 14; break;
+	case 5: color = 10; break;
+	case 6: color = 13; break;
+	default: color = 7; break;
+	}
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), color);
+}
+void printBorder()
+{
+	for (int i = 0; i < 21; i++)
+	{
+		gotoxy(0, i);
+		cout << "■";
+		map[i][0] = 3;
+		map[i][1] = 3;
+	}
+	for (int i = 0; i < 21; i++)
+	{
+		gotoxy(22, i);
+		cout << "■";
+		map[i][22] = 3;
+		map[i][23] = 3;
+	}
+	for (int i = 0; i < 21; i++)
+	{
+		gotoxy(32, i);
+		cout << "■";
+		map[i][32] = 3;
+		map[i][33] = 3;
+	}
+	for (int i = 0; i < 21; i++)
+	{
+		gotoxy(54, i);
+		cout << "■";
+		map[i][54] = 3;
+		map[i][55] = 3;
+	}
+	for (int i = 2; i < 54; i++)
+	{
+		if (i % 2 == 0)//&&map[0][i]==3)
+		{
+			gotoxy(i, 0);
+			cout << "■";
+		}
+	}
+	for (int i = 2; i < 54; i++)
+	{
+		if (i % 2 == 0) //&& map[1][i] == 3)
+		{
+			gotoxy(i, 1);
+			cout << "■";
+		}
+		//map[1][i] = 3;
+	}
+	for (int i = 0; i < 56; i++)
+	{
+		if (i % 2 == 0)
+		{
+			gotoxy(i, 21);
+			cout << "■";
+		}
+		map[21][i] = 3;
+	}
+
+}
+void gameRunning()
+{
+	bk one(1), two(2);//生成方块一二代表角色一二
+	blockChanger(one);//第一次生成第一方块
+	blockChanger(two);//第一次生成第二方块
+	int t;
+	switch (speed)
+	{
+	case 1:t = 10000; break;
+	case 2:t = 5000; break;
+	case 3:t = 1000; break;
+	}//控制方块下落的重要局部变量
+	int flag = 0;//判断是否从键盘敲击的重要局部变量
+	char rec;//用于接收从键盘敲击信号的重要局部变量
+	int borec=0, borec2=0;
+	searchMap();
+	bkForecastPaint(one);
+	bkForecastPaint(two);
+	while (1)
+	{					
+		while (t > 0)
+		{
+			if (_kbhit() != 0)
+			{
+				flag = 1;
+				break;
+			}
+			t--;
+		}
+		//flag = 1;
+		if (true)//底部检测历程
+		{
+			borec2 = BottomScanner(two);
+			if (borec2 == -1 && t == 0)two.y++;
+			else if (borec2 == 1) { gameOverFunction(two.player); break; }//玩家二输了
+			else if (borec2 != -1)two.bottom = 1;//说明到达底部
+
+			borec = BottomScanner(one);
+			if (borec == -1&&t==0)one.y++;//正常
+			else if (borec == 1) { gameOverFunction(one.player); break; }//玩家一输了强制退出循环无需进行下一步操作
+			else if(borec!=-1)one.bottom = 1;//这里需要先判断是否能够向下移动后再进行变化操作此处若不能继续移动则立即调用reSet函数并且直接令flag为0表明不可以控制向下落
+			//返回值为-1表明没有到底，为1说明游戏结束			
+			if (t == 0) 
+			{
+				switch (speed)
+				{
+				case 1:t = 10000; break;
+				case 2:t = 5000; break;
+				case 3:t = 1000; break;
+				}//控制方块下落的重要局部变量
+			}
+		}
+		if (flag)
+		{
+			rec = _getch();
+			switch (rec)
+			{
+			case 's':if(borec == -1&&one.bottom==0)one.y += 1; break;
+			case '2':if (borec2 == -1&&two.bottom==0)two.y += 1; break;
+			case 'a':if (borec == -1&&!LeftBorderScanner(one))one.x -= 2; break;
+			case '1':if (borec2 == -1&&!LeftBorderScanner(two))two.x -= 2; break;
+			case 'd':if (borec == -1&&!RightBorderScanner(one))one.x += 2; break;
+			case '3':if (borec2 == -1&&!RightBorderScanner(two))two.x += 2; break;
+			case 'w': {bool really = rotaterScanner(one); 
+					   if(really)one.rotater++; break; }
+			case '5': {bool really_ = rotaterScanner(two);
+				if (really_)two.rotater++; break;
+			}
+			default:break;
+			}
+			flag = 0;
+		}
+		//功能预制if(rec=='a'||rec==1&&左检测函数
+		//if(rec=='d'||rec==3&&右检测函数
+
+		search();//先刷新界面
+		searchMap();//辅助刷新界面
+		blockChanger(two);
+		blockChanger(one);		
+		searchMap();//在重新绘制方块
+		//borec = -1;//这是导致多次小实验失败的罪魁祸首因为丢失borec认为是到达底部开始扫描消行
+		if (borec != -1)
+		{
+			DeleteMap(one);
+			one.reSet();
+		}
+		if (borec2 != -1)
+		{
+			DeleteMap(two);
+			two.reSet();
+		}
+		bkForecastPaint(two);
+		bkForecastPaint(one);		
+	}
+}
+void blockChanger(bk& who)
+{
+	switch (who.speice)
+	{
+	case 1:LineBlock(who); break;
+	case 2:SquareBlock(who); break;
+	case 3:ZBlock(who); break;
+	case 4:MidStanding(who); break;
+	case 5:LeftBlock(who); break;
+	}
+	return;
+}
+int getConstruction(bk& who)
+{
+	if (who.bottom == 0)return 1;
+	return 2;
+}
+void LineBlock(bk& who)
+{
+	int end = getConstruction(who);
+	if (who.rotater%4 == 1)
+	{
+		for (int i = 0; i < 8; i++)
+		{
+			map[who.y][who.x + i] = end;
+			//gotoxy(who.x + i, who.y);
+		}
+	}
+	else if (who.rotater%4 == 2)
+	{
+		for (int i = 0; i < 4; i++)
+		{
+			map[who.y - i][who.x] = end;
+			map[who.y - i][who.x + 1] = end;
+		}
+	}
+	else if (who.rotater%4 == 3)
+	{
+		for (int i = 0; i < 7; i++)
+			map[who.y][who.x - i] = end;
+		map[who.y][who.x + 1] = end;
+	}
+	else 
+	{
+		for (int i = 0; i < 4; i++)
+		{
+			map[who.y + i][who.x] = end;
+			map[who.y + i][who.x + 1] = end;
+		}
+	}
+}
+void SquareBlock(bk& who)
+{
+	int end = getConstruction(who);
+	for (int i = 0; i < 4; i++)
+		map[who.y][who.x + i] = end;
+	for (int i = 0; i < 4; i++)
+		map[who.y+1][who.x + i] = end;
+}
+void ZBlock(bk& who)
+{
+	int end = getConstruction(who);
+	if (who.rotater%4 == 1)
+	{
+		for (int i = 0; i < 4; i++)
+			map[who.y][who.x + i] = end;
+		for (int i = 0; i < 4; i++)
+			map[who.y + 1][who.x + i + 2] = end;
+	}
+	else if (who.rotater%4 == 2)
+	{
+		for (int i = 0; i < 2; i++)
+		{
+			map[who.y - i][who.x] = end;
+			map[who.y - i][who.x + 1] = end;
+		}
+		for (int i = 0; i < 2; i++)
+		{
+			map[who.y - 1 - i][who.x+2] = end;
+			map[who.y - 1 - i][who.x + 2+1] = end;
+		}
+		
+	}
+	else if (who.rotater%4 == 3)
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			map[who.y][who.x - i] = end;
+		}
+		map[who.y][who.x + 1] = end;
+		for (int i = 0; i < 3; i++)
+		{
+			map[who.y - 1][who.x - i - 2] = end;
+		}
+		map[who.y - 1][who.x - 1] = end;
+	}
+	else
+	{
+		for (int i = 0; i < 2; i++)
+		{
+			map[who.y + i][who.x] = end;
+			map[who.y + i][who.x + 1] = end;
+		}
+		for (int i = 0; i < 2; i++)
+		{
+			map[who.y + 1 + i ][who.x - 2] = end;
+			map[who.y + 1 + i ][who.x - 1] = end;
+		}
+	}
+}
+void MidStanding(bk& who)
+{
+	int end = getConstruction(who);
+	if (who.rotater%4 == 1)
+	{
+		for (int i = who.x; i < who.x + 6; i++)
+			map[who.y][i] = end;
+		map[who.y - 1][who.x + 2] = map[who.y - 1][who.x + 3] = end;
+	}
+	else if (who.rotater%4 == 2)
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			map[who.y - i][who.x] = end;
+			map[who.y - i][who.x + 1] = end;
+		}
+		for (int i = 0; i < 2; i++)
+			map[who.y - 1][who.x - 1 - i] = end;
+	}
+	else if (who.rotater%4 == 3)
+	{
+		for (int i = 0; i < 5; i++)
+		{
+			map[who.y][who.x - i] = end;
+			//gotoxy(who.x - i, who.y); cout << end;
+		}
+		map[who.y][who.x + 1] = end;
+		//gotoxy(who.x + 1, who.y); cout << end;
+		for (int i = 1; i < 3; i++)
+		{
+			map[who.y + 1][who.x - i] = end;
+			//gotoxy(who.x - i, who.y + 1); cout << end;
+		}
+	}
+	else
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			map[who.y + i][who.x] = end;
+			map[who.y + i][who.x + 1] = end;
+		}
+		for (int i = 0; i < 2; i++)
+			map[who.y + 1][who.x+2 + i] = end;
+	}
+}
+void LeftBlock(bk& who)
+{
+	int end=getConstruction(who);
+	if (who.rotater%4 == 1)
+	{
+		for (int i = 0; i < 2; i++)
+			map[who.y][who.x + i] = end;
+		for (int i = 0; i < 6; i++)
+			map[who.y + 1][who.x + i] = end;
+	}
+	else if (who.rotater % 4 == 2)
+	{
+		for (int i = 0; i < 2; i++)
+			map[who.y][who.x + i] = end;
+		for (int i = 0; i < 3; i++)
+		{
+			map[who.y - i][who.x+2] = end;
+			map[who.y - i][who.x +2 +1] = end;
+		}
+	}
+	else if (who.rotater % 4 == 3)
+	{
+		map[who.y][who.x] = map[who.y][who.x + 1] = end;
+		for (int i = who.x - 4; i < who.x + 2; i++)
+			map[who.y - 1][i] = end;
+	}
+	else
+	{
+		map[who.y][who.x] = map[who.y][who.x + 1] = end;
+		for (int i = who.y; i < who.y + 3; i++)
+			map[i][who.x - 2] = map[i][who.x - 1] = end;
+	}
+}
+void search()
+{
+	for (int i = 0; i < 22; i++)
+		for (int j = 0; j < 56; j++)
+			if (map[i][j] == 1)map[i][j] = 0;
+}
+void searchMap()
+{
+	for (int i = 2; i < 22; i++)
+	{
+		for (int j = 0; j < 56; j++)
+		{
+			if (map[i][j] == 1 && (j % 2 == 0)&&(!ghost))
+			{
+				gotoxy(j, i);
+				cout << "■";//cout << map[i][j] << map[i][j + 1];//cout << "■";
+			}
+			else if (map[i][j] == 1 && (j % 2 == 0) && ghost&&i>=10)
+			{
+				gotoxy(j, i);
+				cout << "■";
+			}
+			if (map[i][j] == 0)
+			{
+				gotoxy(j, i);
+				cout << " ";//仅是为了调试而已这里先不输出0
+			}
+			if (map[i][j] == 2&&(j%2==0))
+			{
+				gotoxy(j, i);
+				cout << "  ";
+				gotoxy(j, i);
+				cout << "□";
+			}
+		}
+	}
+}
+int BottomScanner(bk& who)//兼容判定是否结束游戏的标志
+{
+	//先检验顶部空白区是否有相应的方块
+	if (who.player == 1)
+	{
+		for (int i = 0; i < 2; i++)
+			for (int j = 2; j < 22; j++)
+				if (map[i][j] == 2)return 1;
+	}
+	else
+	{
+		for (int i = 0; i < 2; i++)
+			for (int j = 34; j < 56; j++)
+				if (map[i][j] == 2)return 1;
+	}
+	//然后去检验是否在
+	if (who.player == 1)
+	{
+		for (int i = 20; i >= 1; i--)
+			for (int j = 2; j < 22; j++)
+				if (map[i][j] == 1 && (map[i + 1][j] == 2 || map[i + 1][j] == 3))return i;
+	}
+	else
+	{
+		for (int i = 20; i >= 1; i--)
+			for (int j = 34; j < 54; j++)
+				if (map[i][j] == 1 && (map[i + 1][j] == 2 || map[i + 1][j] == 3))return i;
+	}
+	return -1;
+}
+
+void bkForecastPaint(bk&who)
+{
+	if (who.player == 1)
+	{
+		gotoxy(24,2);
+		cout << "1PNext:";
+		gotoxy(24, 3);
+		switch (who.next)
+		{
+		case 1:cout << "■■■■"; break;
+		case 2: {cout << "■■"; gotoxy(24, 4); cout << "■■"; break; }
+		case 3: {cout << "■■"; gotoxy(26, 4); cout << "■■"; break; }
+		case 4: {gotoxy(26, 3); cout << "■"; gotoxy(24, 4); cout << "■■■"; break; }
+		case 5: {cout << "■"; gotoxy(24,4); cout << "■■■"; break; }
+		}
+	}
+	else
+	{
+		gotoxy(24, 6);
+		cout << "2PNext";
+		gotoxy(24, 7);
+		switch (who.next)
+		{
+		case 1:cout << "■■■■"; break;
+		case 2: {cout << "■■"; gotoxy(24, 8); cout << "■■"; break; }
+		case 3: {cout << "■■"; gotoxy(26, 8); cout << "■■"; break; }
+		case 4: {gotoxy(26, 7); cout << "■"; gotoxy(24, 8); cout << "■■■"; break; }
+		case 5: {cout << "■"; gotoxy(24, 8); cout << "■■■"; break; }
+		}
+	}
+}
+
+bool LeftBorderScanner(bk& who)
+{
+	if (who.player == 1)
+	{
+		for(int i=0;i<20;i++)
+			for (int j = 2; j < 22; j++)
+			{
+				if (map[i][j] == 1 && (map[i][j - 1] == 2 || map[i][j - 1] == 3))return true;
+			}
+	}
+	else
+	{
+		for(int i=0;i<20;i++)
+			for (int j = 34; j < 56; j++)
+			{
+				if (map[i][j] == 1 && (map[i][j - 1] == 2 || map[i][j - 1] == 3))return true;
+			}
+	}
+	return false;
+}
+bool RightBorderScanner(bk& who)
+{
+	if (who.player == 1)
+	{
+		for (int i = 0; i < 20; i++)
+			for (int j = 2; j < 22; j++)
+			{
+				if (map[i][j] == 1 && (map[i][j + 1] == 2 || map[i][j + 1] == 3))return true;
+			}
+	}
+	else
+	{
+		for (int i = 0; i < 20; i++)
+			for (int j = 34; j < 56; j++)
+			{
+				if (map[i][j] == 1 && (map[i][j + 1] == 2 || map[i][j + 1] == 3))return true;
+			}
+	}
+	return false;
+}
+bool rotaterScanner(bk& who)
+{
+	switch (who.speice)
+	{
+	case 1:return (LineRotater(who));
+	case 3:return(ZBlockRotater(who));
+	case 4:return(MidSRotater(who));
+	case 5:return (LeftRotater(who));
+	}
+}
+bool LineRotater(bk& who)//检验完毕纠正次数2次
+{
+	if (who.rotater%4 == 1)
+	{
+		if (who.y < 5)return false;//上边界不检测否则可能越界
+		for (int i = who.y - 3; i < who.y; i++)
+			for (int j = who.x; j < who.x + 8; j++)
+				if (map[i][j] != 0)return false;
+	}
+	else if (who.rotater%4 == 2)
+	{
+		if (who.x < 8 && who.player == 1)return false;
+		else if (who.x < 40 && who.player == 2)return false;
+		for (int i = who.y - 3; i <= who.y; i++)
+			for (int j = who.x - 6; j < who.x; j++)
+				if (map[i][j] != 0)return false;
+	}
+	else if (who.rotater%4 == 3)
+	{
+		if (who.y > 17)return false;//下边界不必检测会越界
+		for (int i = who.y + 1; i < who.y + 4; i++)
+			for (int j = who.x - 6; j < who.x + 2; j++)
+				if (map[i][j] != 0)return false;
+	}
+	else
+	{
+		if (who.x > 14 && who.player == 1)return false;
+		else if (who.x > 46 && who.player == 2)return false;
+		for (int i = who.y ; i < who.y + 4; i++)
+			for (int j = who.x+2; j < who.x + 8; j++)
+				if (map[i][j] != 0)return false;
+	}
+	return true;
+}
+bool ZBlockRotater(bk& who)//纠正次数1次
+{
+	if (who.rotater % 4 == 1)//分三步走
+	{
+		if (who.y < 4)return false;
+		for (int i = who.x + 2; i < who.x + 6; i++)
+			if (map[who.y - 2][i] != 0)return false;
+		for (int i = who.x; i < who.x + 6; i++)
+			if (map[who.y - 1][i] != 0)return false;
+		if (map[who.y][who.x + 4] != 0 || map[who.y][who.x + 5] != 0)return false;
+	}
+	else if (who.rotater % 4 == 2)
+	{
+		if (who.x < 6&&who.player==1)return false;
+		if (who.x < 38&&who.player==2 )return false;
+		for (int i = who.x - 4; i < who.x + 2; i++)
+			if (map[who.y - 2][i] != 0)return false;
+		for (int i = who.x - 4; i < who.x; i++)
+			if (map[who.y - 1][i] != 0)return false;
+		if (map[who.y][who.x - 1] != 0 || map[who.y][who.x - 2] != 0)return false;
+	}
+	else if (who.rotater % 4 == 3)//分四步走
+	{
+		if (who.y > 18)return false;
+		if (map[who.y][who.x - 4] != 0 || map[who.y][who.x - 3] != 0)return false;
+		for (int i = who.x - 4; i < who.x + 2; i++)
+			if (map[who.y + 1][i] != 0)return false;
+		for (int i = who.x - 4; i < who.x; i++)
+			if (map[who.y + 2][i] != 0)return false;
+	}
+	else
+	{
+		if (who.x > 16 && who.player == 1)return false;
+		if (who.x > 48&& who.player == 2)return false;
+		for (int i = who.x; i < who.x + 6; i++)
+			if (map[who.y + 2][i] != 0)return false;
+		for (int i = who.x + 2; i < who.x + 6; i++)
+			if (map[who.y + 1][i] != 0)return false;
+		if (map[who.y][who.x + 2] != 0 || map[who.y][who.x + 3] != 0)return false;
+	}
+	return true;
+}
+bool MidSRotater(bk& who)//检验次数0次
+{
+	if (who.rotater % 4 == 1)
+	{
+		if (who.y < 4)return false;
+		if (who.x < 4&&who.player==1)return false;
+		if (who.x < 36 && who.player == 2)return false;
+		if (map[who.y - 1][who.x - 1] != 0 || map[who.y - 1][who.x - 2] != 0 || map[who.y - 1][who.x + 4] != 0
+			|| map[who.y - 1][who.x + 5] != 0)return false;
+		for (int i = who.x; i < who.x + 6; i++)
+			if (map[who.y - 2][i] != 0)return false;
+	}
+	else if (who.rotater % 4 == 2)
+	{
+		int sum_current = 0;
+		if (who.y > 19)return false;
+		if (who.x < 6 && who.player == 1)return false;
+		if (who.x < 38 && who.player == 2)return false;
+		for (int i = who.y - 2; i < who.y + 2; i++)
+			if (map[i][who.x - 4] != 0 || map[i][who.x - 3] != 0)return false;
+		for (int i = who.y - 2; i < who.y + 2; i++)
+			if (map[i][who.x - 2] != 0 || map[i][who.x - 1] != 0)sum_current++;
+		if (sum_current != 1)return false;
+	}
+	else if (who.rotater % 4 == 3)
+	{
+		if (who.y > 18)return false;
+		if (who.x > 16 && who.player == 1)return false;
+		if (who.x > 48 && who.player == 2)return false;
+		for (int i = who.x - 4; i < who.x + 4; i++)
+			if (map[who.y + 2][i] != 0)return false;
+		if (map[who.y + 1][who.x - 4] != 0 || map[who.y + 1][who.x - 3] != 0 || map[who.y + 1][who.x] != 0
+			|| map[who.y + 1][who.x + 1] != 0 || map[who.y + 1][who.x + 2] != 0 || map[who.y + 1][who.x + 3] != 0)return false;
+	}
+	else
+	{
+		if (who.y < 3)return false;
+		if (who.x > 16 && who.player == 1)return false;
+		if (who.x > 48 && who.player == 2)return false;
+		if (map[who.y - 1][who.x + 2] != 0 || map[who.y - 1][who.x + 3] != 0
+			||map[who.y+1][who.x+4]!=0||map[who.y+1][who.x+5]!=0)return false;
+		for (int i = who.x + 2; i < who.x + 6; i++)
+			if (map[who.y][i] != 0 || map[who.y + 2][i] != 0)return false;
+
+	}
+	return true;
+}
+bool LeftRotater(bk& who)
+{
+	if (who.rotater % 4 == 1)
+	{
+		if (who.y < 4)return false;
+		for (int i = who.y - 2; i < who.y + 1; i++)
+			if (map[i][who.x + 2] != 0 || map[i][who.x + 3] != 0 || map[i][who.x + 4] != 0 || map[i][who.x + 5] != 0)return false;
+	}
+	else if (who.rotater % 4 == 2)
+	{
+		if (who.x < 6&&who.player==1)return false;
+		if (who.x < 38 && who.player == 2)return false;
+		for (int i = who.x - 4; i < who.x + 2; i++)
+			if (map[who.y - 1][i] != 0 || map[who.y - 2][i] != 0)return false;
+	}
+	else if (who.rotater % 4 == 3)
+	{
+		if (who.y > 18)return false;
+		for (int i = who.y; i < who.y + 3; i++)
+			if (map[i][who.x - 4] != 0 || map[i][who.x - 3] != 0 || map[i][who.x - 2] != 0 || map[i][who.x - 1] != 0)return false;
+	}
+	else
+	{
+		if (who.x > 16 && who.rotater == 1)return false;
+		if (who.x > 48 && who.rotater == 2)return false;
+		for (int i = who.x; i < who.x + 6; i++)
+			if (map[who.y + 1][i] != 0 || map[who.y + 2][i] != 0)return false;
+	}
+	return true;
+}
+void Triesprint()
+{
+	system("cls");
+	gotoxy(0, 0);
+	cout << "■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■     ■ ■ ■ ■ ■   ■ ■ ■ ■"<<endl;
+	cout << "    ■     ■             ■     ■      ■        ■     ■" << endl;
+	cout << "    ■     ■ ■ ■ ■ ■     ■     ■      ■        ■     ■" << endl;
+	cout << "    ■     ■             ■     ■ ■ ■ ■ ■       ■       ■ ■ ■ ■" << endl;
+	cout << "    ■     ■             ■     ■       ■       ■               ■" << endl;
+	cout << "    ■     ■ ■ ■ ■ ■     ■     ■         ■ ■ ■ ■ ■ ■   ■ ■ ■ ■" << endl;
+	cout << "按下任意键继续.....(按下o键进入操作说明可更改速度)"<<endl;
+	int t = 3000;
+	while (t >= 0)
+	{
+		t--;
+		if (t == 0 && !(_kbhit()))t = 3000;
+		if (_kbhit())break;
+	}
+	char rec = _getch();
+	if (rec == 'o')HowToOperate();
+	system("cls");
+	system("mode con cols=56 lines=22");
+}
+void gameOverFunction(int number)
+{
+	system("cls");
+	system("mode con cols=18 lines=8");
+	if (number == 1)
+	{
+		cout << "■ ■ ■ ■ ■ ■   ■"<<endl;
+		cout << "    ■ ■    ■  ■" << endl;
+		cout << "■ ■ ■ ■    ■  ■" << endl;
+		cout << "■     ■ ■ ■   ■" << endl;
+		cout << "■     ■         " << endl;
+		cout << "■ ■ ■ ■       ■";
+	}
+	else
+	{
+		cout << "■ ■ ■ ■   ■" << endl;
+		cout << "■ ■    ■  ■" << endl;
+		cout << "■ ■    ■  ■" << endl;
+		cout << "■ ■ ■ ■   ■" << endl;
+		cout << "■ ■         " << endl;
+		cout << "■ ■       ■" << endl;
+	}
+	cout << "按下任意键退出......";
+	int t = 3000;
+	while (t >= 0)
+	{
+		t--;
+		if (t == 0 && !(_kbhit()))t = 3000;
+		if (_kbhit())break;
+	}
+}
+void HowToOperate()
+{
+	system("cls");
+	cout << "1P操作方式 w旋转a左移s加速d右移" << endl;
+	cout << "2P操作方式 5旋转1左移2加速3右移" << endl;
+	cout << "本模式下的旋转基于某 一特定方块" << endl;
+	cout << "本模式下的此消彼长基 于随机位置" << endl;
+	cout << "有运气成分参杂有可能 出现长与落" << endl;
+	cout << "地方块重叠看脸的非抽卡......... " << endl;
+	cout << "1.敲o以获取较慢的速度.........." << endl;
+	cout << "2.敲c以获取正常的速度.........." << endl;
+	cout << "3.敲f以获取较快的速度.........." << endl;
+	cout << "4.敲g以进入幽灵模式下落方块不显" << endl;
+	int t = 3000;
+	while (t >= 0)
+	{
+		t--;
+		if (t == 0 && !(_kbhit()))t = 3000;
+		if (_kbhit())break;
+	}
+	char rec = _getch();
+	if (rec == 'o')speed = 1;
+	else if (rec == 'c')speed = 2;
+	else if (rec == 'f')speed = 3;
+	else { ghost = 1; speed = 1; }
+}
+void DeleteMap(bk&who)
+{
+	int flag,i,j,sum=0,how=0;
+	int current_map[19][20];
+	for (int i = 0; i < 19; i++)
+		for (int j = 0; j < 20; j++)
+			current_map[i][j] = 0;
+	if (who.player == 1)//对1p的相应区域执行操作
+	{
+		for (i = 20; i >= 2; i--)
+		{
+			flag = 1;
+			for (j = 2; j < 22; j++)
+			{
+				if (map[i][j] == 0)
+				{
+					flag = 0;
+					break;
+				}
+			}
+			if (flag == 1)//说明可以消行执行相关操作
+			{
+				for (int h = 2; h < 22; h++)
+					map[i][h] = 0;
+				sum = 1;
+			}
+		}
+		if (sum)//可能存在多行消除的有趣现象
+		{
+			int a = 0, b = 0,have=0;
+			for (i = 20; i >= 2; i--)
+			{
+				have = 0;
+				for (int j = 2; j < 22; j++)
+				{
+					if (map[i][j] != 0)have++;
+				}
+				if (have)
+				{
+					for (b = 0, j = 2; b < 20; b++, j++)//注意map为倒序而current_map为正序
+						current_map[a][b] = map[i][j];
+					a++;
+				}
+			}
+			for (int i = 20,a=0; i >= 2; i--,a++)
+			{
+				for (int j = 2; j < 22; j++)
+					map[i][j] = current_map[a][j - 2];
+			}
+			//开始执行随机此消彼长函数5次
+			for(int i=0;i<5;i++)
+			{
+				FriendshipOver(1);
+			}
+		}
+	}
+	else
+	{
+		for (i = 20; i >= 2; i--)
+		{
+			flag = 1;
+			for (j = 34; j < 54; j++)
+			{
+				if (map[i][j] == 0)
+				{
+					flag = 0;
+					break;
+				}
+			}
+			if (flag == 1)//说明可以消行执行相关操作
+			{
+				for (int h = 34; h < 54; h++)
+					map[i][h] = 0;
+				sum = 1;
+			}
+		}
+		if (sum)//可能存在多行消除的有趣现象
+		{
+			int a = 0, b = 0, have = 0;
+			for (i = 20; i >= 2; i--)
+			{
+				have = 0;
+				for (int j = 34; j < 54; j++)
+				{
+					if (map[i][j] != 0)have++;
+				}
+				if (have)
+				{
+					for (b = 0, j = 34; b < 20; b++, j++)//注意map为倒序而current_map为正序
+						current_map[a][b] = map[i][j];
+					a++;
+				}
+			}
+			for (int i = 20, a = 0; i >= 2; i--, a++)
+			{
+				for (int j = 34; j < 54; j++)
+					map[i][j] = current_map[a][j - 34];
+			}
+			for(int i=0;i<5;i++)
+			{
+				FriendshipOver(2);
+			}
+		}
+	}
+}
+bool FriendshipOver(int number)
+{
+	srand((unsigned int)time(NULL));
+	int x = 0;
+	if (number == 2) x = rand() % 20 + 2;
+	else x = rand() % 20 + 2 + 32;
+	int y = rand() % 21;
+	if (y <= 1)y += 2;
+	if (map[y][x] == 0)
+	{
+		map[y][x] = 2;
+		if (x % 2)//奇数列
+		{
+			map[y][x - 1] = 2;
+		}
+		else map[y][x + 1] = 2;
+		return true;
+	}
+	else return false;
+}
+int main()
+{
+	hidden_cursor();
+	system("title 我罗斯");
+	system("mode con cols=70 lines=8");
+	Triesprint();
+	printBorder();
+	gameRunning();
+
+}
+void function()
+{
+	system("cls");
+	for (int i = 0; i < 22; i++)
+		for (int j = 0; j < 56; j++)
+			cout << map[i][j];
+}
